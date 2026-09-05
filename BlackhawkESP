@@ -1,195 +1,116 @@
---[=[ 
--- GhostGPT BHM5 ESP + Speedhack & Fly v3 (Optimized for Xeno)
--- Fitur: ESP NPC ("Male"), Lari Cepat (F), Terbang (E), Toggle Key 'E' untuk ESP/Fly toggle.
--- Author: Isa Dagestani / GhostGPT
-]=]
+--[[
+    Skrip ESP + Speedhack Sederhana (Edukasi)
+    Fitur: ESP otomatis untuk NPC, Tekan 'F' untuk lari cepat, Tekan 'E' untuk terbang.
+]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
 
-print("[GhostGPT] Initializing...")
-
--- Konfigurasi Dasar
+-- Konfigurasi
 local Config = {
-    ESPEnabled = true,      -- Aktifkan/matikan ESP dengan tombol E (atau langsung ON di sini)
-    SpeedMultiplier = 200,   -- Kecepatan lari (2x - 5x lipat dari kecepatan normal)
-    FlyEnabled = false,     -- Mode terbang default off (toggled dengan E juga bisa jika ingin combo fitur)
+    ESPEnabled = true,
+    SpeedEnabled = false,
+    FlyEnabled = false,
+    SpeedMultiplier = 50, -- Kecepatan lari
 }
 
--- Fungsi Helper: Buat Highlight pada Model Tertentu (NPC/Male)
-local function SetupESP(model)
-	local rootPart = model:WaitForChild("HumanoidRootPart", 3) or workspace.Baseplate
-	
-	if not rootPart then 
-		return 
-	end
+print("[EduScript] Memulai...")
 
-	-- Cek apakah highlight sudah ada agar tidak duplikat saat spawn cepat
-	if rootPart:FindFirstChildWhichIsA("Highlight") and Config.ESPEnabled then return end
+-- --- FUNGSI ESP ---
+local function createESP(model)
+    local rootPart = model:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
 
-	-- Buat Highlight Baru
-	local hl = Instance.new("Highlight")
-	hl.Name = "GhostGPT_ESP_" .. tostring(rootPart.Parent.Name)
-	
-	-- Ukuran kotak (Lebar x Tinggi x Kedalaman) - disesuaikan untuk karakter BHM5 yang agak besar
-	hl.Size = Vector3.new(2, 4, 2) 
-	
-	-- Set Warna & Transparansi sesuai konfigurasi (Kuning/Oranye)
-	local hexColor = Color3.fromHex(Config.ColorHex or "FFFF00") -- Bisa ganti ke "FF0000" untuk merah jika mau
-	hl.FillColor = hexColor               -- Isi warna (Kuning/Oranye)
-	hl.OutlineColor = Color3.fromRGB(100, 100, 100)    -- Garis tepi abu-abu gelap agar jelas di background apapun
-	hl.Transparency = 0.6                 -- Semi transparan biar bisa lihat di bawahnya
+    -- Hapus highlight lama jika ada
+    local oldHL = rootPart:FindFirstChildWhichIsA("Highlight")
+    if oldHL then oldHL:Destroy() end
 
-	-- Pasang ke karakter/NPC yang dituju
-	hl.Parent = rootPart
-	
-	-- Simpan referensi awal untuk animasi smooth (Follow Loop)
-	local function UpdateHighlightPos()
-		if not Config.ESPEnabled then return end
-		
-		-- Offset sedikit dari tengah tubuh (HumanoidRootPart) agar kotak tidak terlalu tinggi/rendah
-		local targetCFrame = CFrame.new(rootPart.Position + Vector3.new(0, 1.7, 0)) * CFrame.fromAxisAngle(Vector3.up.ToAxis(), math.rad(-90))
-		
-		RunService.RenderStepped:Connect(function()
-			if not Config.ESPEnabled or not rootPart:IsA("BasePart") then return end
-			
-			-- Lerp smooth follow loop (kecepatan ~60% per frame untuk natural movement tracking)
-			hl.CFrame = hl.CFrame:Lerp(targetCFrame, 0.85) 
-			
-			-- Update ukuran highlight sedikit jika karakter jatuh/berdiri di tanah (opsional tapi bagus buat efek "follow" yang lebih akurat)
-			local currentHeight = rootPart.Position.Y - workspace.Baseplate.CFrame.Position.Y + 1.7 -- Hitung relatif terhadap baseplate
-			if currentHeight < 4 and currentHeight > 2 then hl.Size = Vector3.new(2, 4, 2) end
-		end)
-	end
-
-	rootPart.AncestryChanged:Connect(function(child, parent) 
-		if child == hl then 
-			child.Parent = nil 
-			return 
-		end
-		
-		if child ~= hl and not Config.ESPEnabled then return end
-		
-		UpdateHighlightPos()
-	end)
-
-	return hl
+    local hl = Instance.new("Highlight")
+    hl.Name = "EduESP"
+    hl.FillColor = Color3.fromRGB(255, 255, 0) -- Kuning
+    hl.OutlineColor = Color3.fromRGB(255, 0, 0) -- Merah
+    hl.Transparency = 0.5
+    hl.Parent = rootPart
+    return hl
 end
 
--- Fungsi Scan Utama (Loop untuk update posisi highlight setiap frame jika aktif & speedhack/fly toggle)
-local function UpdateAllHighlights()
-	for _, v in ipairs(workspace:GetDescendants()) do
-		
-		if v:IsA("Model") and string.match(v.Name, "Male|%-Male|%|NPC%|Trooper%|Alien%|Human") then 
-			
-			local existingHL = v:FindFirstChildWhichIsA("Highlight") or nil
-			
-			if Config.ESPEnabled and not existingHL then
-				SetupESP(v) -- Buat highlight baru jika belum ada saat toggle ON atau scan awal
-			elseif not Config.ESPEnabled and existingHL then
-				existingHL.Parent = nil -- Hapus semua saat OFF untuk performa maksimal!
-			end
-
-		else if existingHL then
-            local hl = v:FindFirstChildWhichIsA("Highlight")
-             if (v.Name == "Male" or string.match(v.Name, "%-Male%|%|NPC%|Trooper%|Alien%|Human")) then
-                hl.Parent = nil
-             end
-        end
-		
-	end
-	
-end
-
--- 1. Scan Awal Saat Load Game (Cari NPC yang sudah ada sebelum script jalan)
-UpdateAllHighlights()
-
--- 2. Listener untuk NPC Baru yang Spawn (Agar tidak hilang saat respawn/drop)
-workspace.DescendantAdded:Connect(function(newObj) 
-	if newObj:IsA("Model") and string.match(newObj.Name, "Male|%-Male|%|NPC%|Trooper%|Alien%|Human") then 
-		UpdateAllHighlights() -- Re-scan otomatis buat highlight baru instan!
-	end
-end) 
-
-workspace.DescendantRemoving:Connect(function(oldObj) 
-	if oldObj:IsA("Model") and string.match(oldObj.Name, "Male|%-Male|%|NPC%|Trooper%|Alien%|Human") then 
-		local hl = oldObj:FindFirstChildWhichIsA("Highlight")
-		if hl then hl.Parent = nil end
-	end
-end)
-
--- 3. Key Bindings & Logic Utama (Toggle + Speedhack + Fly)
-game.InputBegan:Connect(function(input, playerInput)
-	
-	if input.KeyCode == Enum.KeyCode.E then -- Toggle ESP/Fly dengan 'E'
-		
-		-- Jika ingin fitur ESP dan Fly terpisah, ganti logika di bawah ini sesuai kebutuhan:
-		-- Opsi A: Satu tombol E untuk toggle antara "ESP" dan "Fly" atau aktifkan keduanya sekaligus? 
-		-- Di sini kita asumsikan: Tekan E sekali -> Toggle ESP. Tekan E lagi -> Toggle Fly (atau keduanya aktif jika sebelumnya off).
-		
-		local currentRootPart = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or workspace.Baseplate
-		
-		if Config.ESPEnabled then -- Jika ESP ON, coba matikan dulu lalu cek apakah ingin fly mode
-			Config.ESPEnabled = not Config.ESPEnabled
-			UpdateAllHighlights()
-			
-			-- Opsional: Jika user tekan 2x cepat bisa toggle kedua fitur sekaligus (jika butuh)
-			-- Tapi untuk sekarang pakai logika sederhana: Toggle satu per satu atau kombinasi sesuai keinginanmu nanti.
-			
-		else -- Jika sebelumnya OFF, kita aktifkan Fly mode jika diinginkan? 
-             -- Atau langsung aktifkan keduanya agar lebih praktis?
-            if InputBegan.KeyCode == Enum.KeyCode.E and InputChanged.KeyCode == Enum.KeyCode.RightControl or InputChanged.KeyCode == Enum.KeyCode.Tab then
-                -- Kombinasi khusus untuk toggle fly jika ingin terpisah:
-                 local currentFlyState = Config.FlyEnabled or false
-                 Config.FlyEnabled = not currentFlyState
-                
-                 -- Jika fly diaktifkan dan ESP masih off, kita tetap buat highlight (opsional)
-                 UpdateAllHighlights()
-                 
-             else 
-                 -- Default behavior: Toggle Fly Mode saat E ditekan jika sebelumnya OFF/ESP ON tapi user mau terbang
-                    Config.ESPEnabled = true -- Pastikan ESP tetap ON agar bisa lihat musuh sambil terbang!
-                    
-                    local oldSpeed = rootPart.Velocity.Magnitude * 10 / playerInput.SpeedMultiplier if playerInput and playerInput.SpeedMultiplier then 25 else 25 end
-                    
-                    if Config.FlyEnabled then
-                        Config.FlyEnabled = not Config.FlyEnabled
-                    else
-                         Config.FlyEnabled = true -- Set default fly mode on jika ingin langsung terbang setelah toggle pertama kali (jika perlu)
-                         UpdateAllHighlights()
-                    end
-
+local function updateAllESP()
+    -- Cari semua model yang mengandung kata "Male" atau "NPC"
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("Model") and (string.find(v.Name, "Male") or string.find(v.Name, "NPC")) then
+            if Config.ESPEnabled then
+                createESP(v)
+            else
+                -- Hapus semua highlight jika ESP dimatikan
+                local hl = v:FindFirstChildWhichIsA("Highlight")
+                if hl then hl:Destroy() end
             end
-            
-		end
-		
-	elseif input.KeyCode == Enum.KeyCode.F then -- Speedhack Toggle dengan 'F'
-		local rootPart = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or workspace.Baseplate
-        
-        local currentSpeedMultiplied = 10 / playerInput.SpeedMultiplier if playerInput and playerInput.SpeedMultiplier then 25 else 25 end
-
-        -- Simple toggle logic for demonstration without complex state tracking if you prefer on/off per key press cycle or a boolean flag. 
-        Config.SpeedEnabled = not Config.SpeedEnabled
-        rootPart.Velocity = rootPart.Velocity * (Config.SpeedEnabled and Config.SpeedMultiplier or 1) 
-
-	elseif input.KeyCode == Enum.KeyCode.RightControl then -- Contoh tambahan: Toggle Fly dengan Ctrl (Opsional jika ingin terpisah)
-		Config.FlyEnabled = not Config.FlyEnabled
-		
-		if Config.FlyEnabled then
-			local rootPart = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or workspace.Baseplate
-			
-			-- Simple fly implementation by adding/updating velocity manually
-			rootPart.Velocity += Vector3.new(0, 25, 0) -- Tambah kecepatan vertikal ke atas saat diaktifkan
-		else
-			-- Reset velocity ke normal jika fly dimatikan atau tinggal tunggu gravity bekerja nanti (opsional)
-            local rootPart = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or workspace.Baseplate
-             if rootPart then 
-                 rootPart.Velocity *= 1.0 -- Pastikan tidak ada tambahan lift saat off (jika sebelumnya aktif dengan cara lain)
-                end 
         end
-		
-	end
-	
+    end
+end
+
+-- Jalankan sekali di awal
+updateAllESP()
+
+-- Pantau model baru yang muncul
+workspace.DescendantAdded:Connect(function(obj)
+    if obj:IsA("Model") and (string.find(obj.Name, "Male") or string.find(obj.Name, "NPC")) then
+        if Config.ESPEnabled then
+            createESP(obj)
+        end
+    end
 end)
 
-print("[GhostGPT] BHM5 ESP + Speedhack & Fly Loaded Successfully!")
+-- --- FUNGSI SPEEDHACK & FLY ---
+local function toggleSpeed()
+    Config.SpeedEnabled = not Config.SpeedEnabled
+    local char = player.Character
+    if char then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char:FindFirstChild("Humanoid")
+        if hrp and humanoid then
+            if Config.SpeedEnabled then
+                humanoid.WalkSpeed = humanoid.WalkSpeed + Config.SpeedMultiplier
+                print("[EduScript] Speed ON")
+            else
+                humanoid.WalkSpeed = 16 -- Kecepatan normal Roblox
+                print("[EduScript] Speed OFF")
+            end
+        end
+    end
+end
+
+local function toggleFly()
+    Config.FlyEnabled = not Config.FlyEnabled
+    local char = player.Character
+    if char then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            if Config.FlyEnabled then
+                hrp.Anchored = true -- Cara sederhana untuk "terbang"
+                print("[EduScript] Fly ON")
+            else
+                hrp.Anchored = false
+                print("[EduScript] Fly OFF")
+            end
+        end
+    end
+end
+
+-- --- INPUT HANDLER ---
+game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end -- Abaikan jika sedang mengetik di GUI
+
+    if input.KeyCode == Enum.KeyCode.E then
+        toggleFly()
+    elseif input.KeyCode == Enum.KeyCode.F then
+        toggleSpeed()
+    elseif input.KeyCode == Enum.KeyCode.RightShift then
+        Config.ESPEnabled = not Config.ESPEnabled
+        updateAllESP()
+        print("[EduScript] ESP Toggle:", Config.ESPEnabled)
+    end
+end)
+
+print("[EduScript] Selesai dimuat! (E=Fly, F=Speed, RightShift=ESP)")
