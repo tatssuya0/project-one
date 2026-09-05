@@ -1,0 +1,68 @@
+local function ensureHighlight(model)
+	if model:IsA("Model") and model.Name == "Male" then
+		local highlight = model:FindFirstChildOfClass("Highlight")
+
+		if not highlight then
+			highlight = Instance.new("Highlight")
+			highlight.Name = "AutoHighlight"
+			highlight.FillColor = Color3.fromRGB(255, 100, 10)
+			highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+			highlight.Parent = model
+		end
+	end
+end
+
+for _, obj in ipairs(workspace:GetDescendants()) do
+	ensureHighlight(obj)
+end
+
+workspace.DescendantAdded:Connect(function(obj)
+	ensureHighlight(obj)
+end)
+
+workspace.DescendantRemoving:Connect(function(obj)
+	if obj:IsA("Highlight") and obj.Parent and obj.Parent.Name == "Male" then
+		task.wait()
+		if obj.Parent then
+			ensureHighlight(obj.Parent)
+		end
+	end
+end)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+local nvgDisabled = false
+local nvgInterface = player.PlayerGui:FindFirstChild("NVGInterface")
+local colorCorrection = nil
+
+local function getColorCorrection()
+	local effect = game:GetService("Lighting"):FindFirstChild("ColorCorrection")
+	if effect and effect:IsA("ColorCorrectionEffect") then
+		return effect
+	end
+	local firstEffect = game:GetService("Lighting"):FindFirstChildWhichIsA("ColorCorrectionEffect")
+	return firstEffect
+end
+
+local function toggleNVG()
+	nvgDisabled = not nvgDisabled
+
+	if nvgInterface then
+		nvgInterface.Enabled = not nvgDisabled
+	end
+
+	colorCorrection = getColorCorrection()
+	if colorCorrection then
+		colorCorrection.Enabled = not nvgDisabled
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	if input.KeyCode == Enum.KeyCode.KeypadFive then
+		toggleNVG()
+	end
+end)
