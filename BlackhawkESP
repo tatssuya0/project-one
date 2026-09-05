@@ -1,86 +1,142 @@
 --[[
-    Skrip ESP + Speedhack Sederhana (Edukasi)
-    Fitur: ESP otomatis untuk NPC, Tekan 'F' untuk lari cepat, Tekan 'E' untuk terbang.
+    ESP Optimasi - Membedakan Player & NPC
+    Fitur: 
+    - ESP Hijau untuk Player Asli
+    - ESP Merah untuk NPC/Musuh
+    - Tombol F: Speedhack
+    - Tombol E: Fly
+    - Tombol RightShift: Toggle ESP
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 
--- Konfigurasi
+-- === KONFIGURASI ===
 local Config = {
     ESPEnabled = true,
     SpeedEnabled = false,
     FlyEnabled = false,
-    SpeedMultiplier = 50, -- Kecepatan lari
+    SpeedMultiplier = 50,
 }
 
-print("[EduScript] Memulai...")
+print("[ESP] Memulai...")
 
--- --- FUNGSI ESP ---
+-- === FUNGSI UTILITY ===
+local function isPlayerCharacter(model)
+    -- Cek apakah model adalah karakter pemain asli
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character == model then
+            return true
+        end
+    end
+    return false
+end
+
+local function isNPC(model)
+    -- Cek apakah model adalah NPC (bukan player)
+    if not model:IsA("Model") then return false end
+    if not model:FindFirstChild("Humanoid") then return false end
+    
+    -- Bukan player dan memiliki Humanoid = NPC
+    return not isPlayerCharacter(model)
+end
+
+-- === FUNGSI ESP ===
 local function createESP(model)
-    local rootPart = model:FindFirstChild("HumanoidRootPart")
+    local rootPart = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head")
     if not rootPart then return end
-
-    -- Hapus highlight lama jika ada
-    local oldHL = rootPart:FindFirstChildWhichIsA("Highlight")
+    
+    -- Hapus ESP lama jika ada
+    local oldHL = rootPart:FindFirstChild("ESPHighlight")
     if oldHL then oldHL:Destroy() end
-
+    
     local hl = Instance.new("Highlight")
-    hl.Name = "EduESP"
-    hl.FillColor = Color3.fromRGB(255, 255, 0) -- Kuning
-    hl.OutlineColor = Color3.fromRGB(255, 0, 0) -- Merah
-    hl.Transparency = 0.5
+    hl.Name = "ESPHighlight"
+    hl.Transparency = 0.4
+    hl.Size = Vector3.new(2.5, 4.5, 2.5)
+    
+    -- Warna berbeda: Player = Hijau, NPC = Merah
+    if isPlayerCharacter(model) then
+        hl.FillColor = Color3.fromRGB(0, 255, 0)   -- Hijau terang
+        hl.OutlineColor = Color3.fromRGB(0, 150, 0) -- Hijau tua
+    else
+        hl.FillColor = Color3.fromRGB(255, 0, 0)   -- Merah terang
+        hl.OutlineColor = Color3.fromRGB(150, 0, 0) -- Merah tua
+    end
+    
     hl.Parent = rootPart
+    
+    -- Efek animasi smooth
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if not Config.ESPEnabled or not rootPart.Parent then
+            connection:Disconnect()
+            return
+        end
+        
+        -- Offset sedikit agar highlight berada di tengah badan
+        local targetCF = CFrame.new(rootPart.Position + Vector3.new(0, 1.5, 0))
+        hl.CFrame = hl.CFrame:Lerp(targetCF, 0.7)
+    end)
+    
     return hl
 end
 
 local function updateAllESP()
-    -- Cari semua model yang mengandung kata "Male" atau "NPC"
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if v:IsA("Model") and (string.find(v.Name, "Male") or string.find(v.Name, "NPC")) then
-            if Config.ESPEnabled then
-                createESP(v)
-            else
-                -- Hapus semua highlight jika ESP dimatikan
-                local hl = v:FindFirstChildWhichIsA("Highlight")
-                if hl then hl:Destroy() end
+    local characters = {}
+    
+    -- Kumpulkan semua karakter player
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then
+            table.insert(characters, plr.Character)
+        end
+    end
+    
+    -- Kumpulkan semua NPC di workspace
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj:FindFirstChild("Humanoid") then
+            if not isPlayerCharacter(obj) then
+                table.insert(characters, obj)
+            end
+        end
+    end
+    
+    -- Update ESP untuk semua karakter
+    for _, char in ipairs(characters) do
+        if Config.ESPEnabled then
+            createESP(char)
+        else
+            -- Hapus semua ESP jika dimatikan
+            for _, part in ipairs(char:GetDescendants()) do
+                if part.Name == "ESPHighlight" then
+                    part:Destroy()
+                end
             end
         end
     end
 end
 
--- Jalankan sekali di awal
-updateAllESP()
-
--- Pantau model baru yang muncul
-workspace.DescendantAdded:Connect(function(obj)
-    if obj:IsA("Model") and (string.find(obj.Name, "Male") or string.find(obj.Name, "NPC")) then
-        if Config.ESPEnabled then
-            createESP(obj)
-        end
-    end
-end)
-
--- --- FUNGSI SPEEDHACK & FLY ---
+-- === FUNGSI SPEEDHACK ===
 local function toggleSpeed()
     Config.SpeedEnabled = not Config.SpeedEnabled
     local char = player.Character
     if char then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
         local humanoid = char:FindFirstChild("Humanoid")
-        if hrp and humanoid then
+        if humanoid then
             if Config.SpeedEnabled then
                 humanoid.WalkSpeed = humanoid.WalkSpeed + Config.SpeedMultiplier
-                print("[EduScript] Speed ON")
+                print("[ESP] Speed ON")
             else
-                humanoid.WalkSpeed = 16 -- Kecepatan normal Roblox
-                print("[EduScript] Speed OFF")
+                humanoid.WalkSpeed = 16 -- Reset ke normal
+                print("[ESP] Speed OFF")
             end
         end
     end
 end
 
+-- === FUNGSI FLY ===
 local function toggleFly()
     Config.FlyEnabled = not Config.FlyEnabled
     local char = player.Character
@@ -88,20 +144,49 @@ local function toggleFly()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if hrp then
             if Config.FlyEnabled then
-                hrp.Anchored = true -- Cara sederhana untuk "terbang"
-                print("[EduScript] Fly ON")
+                hrp.Anchored = true
+                print("[ESP] Fly ON")
             else
                 hrp.Anchored = false
-                print("[EduScript] Fly OFF")
+                print("[ESP] Fly OFF")
             end
         end
     end
 end
 
--- --- INPUT HANDLER ---
-game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end -- Abaikan jika sedang mengetik di GUI
+-- === EVENT LISTENER ===
+-- Jalankan sekali di awal
+updateAllESP()
 
+-- Pantau perubahan di workspace
+workspace.DescendantAdded:Connect(function(obj)
+    if obj:IsA("Model") and obj:FindFirstChild("Humanoid") then
+        wait(0.1) -- Tunggu sebentar agar karakter selesai spawn
+        updateAllESP()
+    end
+end)
+
+workspace.DescendantRemoving:Connect(function(obj)
+    if obj:IsA("Model") and obj:FindFirstChild("Humanoid") then
+        -- Hapus ESP saat karakter dihapus
+        for _, part in ipairs(obj:GetDescendants()) do
+            if part.Name == "ESPHighlight" then
+                part:Destroy()
+            end
+        end
+    end
+end)
+
+-- Pantau player baru masuk
+Players.PlayerAdded:Connect(function()
+    wait(0.5)
+    updateAllESP()
+end)
+
+-- === INPUT HANDLER ===
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
     if input.KeyCode == Enum.KeyCode.E then
         toggleFly()
     elseif input.KeyCode == Enum.KeyCode.F then
@@ -109,8 +194,9 @@ game:GetService("UserInputService").InputBegan:Connect(function(input, gameProce
     elseif input.KeyCode == Enum.KeyCode.RightShift then
         Config.ESPEnabled = not Config.ESPEnabled
         updateAllESP()
-        print("[EduScript] ESP Toggle:", Config.ESPEnabled)
+        print("[ESP] ESP Toggle:", Config.ESPEnabled)
     end
 end)
 
-print("[EduScript] Selesai dimuat! (E=Fly, F=Speed, RightShift=ESP)")
+print("[ESP] Selesai dimuat! (E=Fly, F=Speed, RightShift=ESP)")
+print("[ESP] Player = Hijau | NPC = Merah")
