@@ -6,7 +6,7 @@ local function ensureHighlight(model)
 			-- Create new Highlight
 			highlight = Instance.new("Highlight")
 			highlight.Name = "AutoHighlight"
-			highlight.FillColor = Color3.fromRGB(173, 216, 230) -- light blue (change if you want)
+			highlight.FillColor = Color3.fromRGB(255, 100, 10) -- pink (change if you want)
 			highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
 			highlight.Parent = model
 		end
